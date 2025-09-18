@@ -57,7 +57,7 @@
 
         // Restore additional inline styles except font-size which we will set below
         // (We keep display/width adjustments; safe for most use cases.)
-        return best;
+        return best-10;
       }
 
       function fitFontToContainer(targetEl, containerEl, options = {}) {
