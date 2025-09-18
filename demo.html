@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dynamic Font Size Util – Fit Text To Container</title>
+  <script src="https://cdn.jsdelivr.net/gh/kishorek/dynamic-font-size-js@refs/heads/main/fontfit.js"></script>
+  <style>
+    :root {
+      --bg: #0e1116;
+      --panel: #171a21;
+      --ink: #e6e6e6;
+      --muted: #9aa4b2;
+      --accent: #4f8cff;
+      --accent-2: #22c55e;
+      --border: #2a2f3a;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background: radial-gradient(1200px 800px at 80% -10%, #1b2436 0%, var(--bg) 60%);
+    }
+    .wrap {
+      min-height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+    }
+    header {
+      padding: 12px 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.0));
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      backdrop-filter: blur(6px);
+      z-index: 10;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 18px;
+      align-items: center;
+    }
+    .control {
+      display: grid;
+      gap: 6px;
+      min-width: 220px;
+    }
+    .label {
+      font-size: 12px;
+      letter-spacing: 0.3px;
+      color: var(--muted);
+    }
+    input[type="range"] {
+      width: 240px;
+    }
+    input[type="text"], textarea {
+      background: #0c0f14;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      outline: none;
+      width: 100%;
+    }
+    textarea { min-height: 44px; resize: vertical; }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding: 0 16px 16px;
+    }
+    .stage {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 16px;
+      align-items: stretch;
+      height: calc(100vh - 140px);
+      max-height: 1200px;
+    }
+    @media (max-width: 1000px) {
+      .stage { grid-template-columns: 1fr; height: auto; }
+    }
+
+    .container-shell {
+      background: #0c0f14;
+      border: 1px dashed #314055;
+      border-radius: 12px;
+      padding: 12px;
+      display: grid;
+      place-items: center;
+      min-height: 280px;
+    }
+
+    .container {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      color: var(--ink);
+      padding: 12px;
+      display: grid;
+      place-items: center;
+      overflow: hidden; /* important: hide overflow to visually confirm fit */
+      /* these are controlled by JS via style width/height */
+    }
+
+    .target {
+      text-align: center;
+      line-height: 1.1;
+      margin: 0;
+      /* Ensure wrapping behaves well */
+      white-space: normal;
+      overflow-wrap: anywhere; /* handle long words */
+    }
+
+    .sidebar {
+      background: #0c0f14;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+    .hint { color: var(--muted); font-size: 12px; }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .stat { color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .footer {
+      padding: 10px 16px 16px;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+    .btn {
+      border: 1px solid var(--border);
+      background: #12161e;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    .btn:hover { border-color: #3a4353; }
+    .ok { color: var(--accent-2) }
+    .warn { color: #f59e0b }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="controls">
+        <div class="control">
+          <label class="label">Container width (%)</label>
+          <input id="widthRange" type="range" min="20" max="100" value="80" />
+        </div>
+        <div class="control">
+          <label class="label">Container height (vh)</label>
+          <input id="heightRange" type="range" min="20" max="90" value="60" />
+        </div>
+        <div class="control">
+          <label class="label">Min font (px)</label>
+          <input id="minFont" type="number" value="8" min="1" />
+        </div>
+        <div class="control">
+          <label class="label">Max font (px)</label>
+          <input id="maxFont" type="number" value="200" min="10" />
+        </div>
+        <button id="refitBtn" class="btn">Refit Now</button>
+        <span id="fitStatus" class="pill">Waiting…</span>
+      </div>
+    </header>
+
+    <main>
+      <div class="stage">
+        <div class="container-shell">
+          <div id="demoContainer" class="container" style="width: 80%; height: 60vh;">
+            <h1 id="demoTarget" class="target">
+              Dynamic font sizing that always fits its container. Resize the window or tweak the sliders to test.
+            </h1>
+          </div>
+        </div>
+        <aside class="sidebar">
+          <div class="control">
+            <label class="label">Edit text</label>
+            <textarea id="textInput">Dynamic font sizing that always fits its container. Resize the window or tweak the sliders to test.</textarea>
+            <div class="hint">Try adding more lines or a veeeeeerylongwordwithoutbreaks to see behavior.</div>
+          </div>
+          <div class="control">
+            <label class="label">Container padding (px)</label>
+            <input id="padRange" type="range" min="0" max="80" value="12" />
+          </div>
+          <div class="control">
+            <label class="label">Text align</label>
+            <select id="alignSelect">
+              <option value="center" selected>Center</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+              <option value="justify">Justify</option>
+            </select>
+          </div>
+          <div class="control">
+            <label class="label">Line-height</label>
+            <input id="lhRange" type="range" min="0.9" max="1.6" step="0.01" value="1.1" />
+          </div>
+          <div class="stat" id="statInfo">Size: —</div>
+        </aside>
+      </div>
+    </main>
+
+    <div class="footer">
+      <span>Utility: window.fitFontToContainer(targetEl, containerEl, options)</span>
+    </div>
+  </div>
+
+  
+  <script>
+    // Demo wiring
+    const container = document.getElementById('demoContainer');
+    const target = document.getElementById('demoTarget');
+
+    const widthRange = document.getElementById('widthRange');
+    const heightRange = document.getElementById('heightRange');
+    const minFont = document.getElementById('minFont');
+    const maxFont = document.getElementById('maxFont');
+    const padRange = document.getElementById('padRange');
+    const textInput = document.getElementById('textInput');
+    const refitBtn = document.getElementById('refitBtn');
+    const fitStatus = document.getElementById('fitStatus');
+    const alignSelect = document.getElementById('alignSelect');
+    const lhRange = document.getElementById('lhRange');
+    const statInfo = document.getElementById('statInfo');
+
+    function applyContainerDims() {
+      container.style.width = widthRange.value + '%';
+      container.style.height = heightRange.value + 'vh';
+    }
+    function applyPadding() {
+      container.style.padding = padRange.value + 'px';
+    }
+    function applyTextAlign() {
+      target.style.textAlign = alignSelect.value;
+    }
+    function applyLineHeight() {
+      target.style.lineHeight = lhRange.value;
+    }
+
+    applyContainerDims();
+    applyPadding();
+    applyTextAlign();
+    applyLineHeight();
+
+    let controller = window.fitFontToContainer(target, container, {
+      minPx: Number(minFont.value),
+      maxPx: Number(maxFont.value),
+      debounceMs: 60,
+    });
+
+    function refreshStats() {
+      const size = target.dataset.fittedFontPx ? target.dataset.fittedFontPx + 'px' : '—';
+      const fits = target.scrollWidth <= container.clientWidth && target.scrollHeight <= container.clientHeight;
+      statInfo.textContent = `Font: ${size} | Fits: ${fits ? 'Yes' : 'No'} | Container: ${container.clientWidth}×${container.clientHeight}`;
+      fitStatus.textContent = fits ? 'Fitting ✓' : 'Overflowing!';
+      fitStatus.className = 'pill ' + (fits ? 'ok' : 'warn');
+    }
+
+    const updateAndRefit = () => { controller.refit(); setTimeout(refreshStats, 0); };
+
+    // Controls
+    widthRange.addEventListener('input', () => { applyContainerDims(); updateAndRefit(); });
+    heightRange.addEventListener('input', () => { applyContainerDims(); updateAndRefit(); });
+    padRange.addEventListener('input', () => { applyPadding(); updateAndRefit(); });
+
+    minFont.addEventListener('change', () => {
+      controller.disconnect();
+      controller = window.fitFontToContainer(target, container, {
+        minPx: Number(minFont.value),
+        maxPx: Number(maxFont.value),
+        debounceMs: 60,
+      });
+      setTimeout(refreshStats, 80);
+    });
+    maxFont.addEventListener('change', () => {
+      controller.disconnect();
+      controller = window.fitFontToContainer(target, container, {
+        minPx: Number(minFont.value),
+        maxPx: Number(maxFont.value),
+        debounceMs: 60,
+      });
+      setTimeout(refreshStats, 80);
+    });
+
+    textInput.addEventListener('input', () => { target.textContent = textInput.value; updateAndRefit(); });
+    refitBtn.addEventListener('click', updateAndRefit);
+    alignSelect.addEventListener('change', () => { applyTextAlign(); updateAndRefit(); });
+    lhRange.addEventListener('input', () => { applyLineHeight(); updateAndRefit(); });
+
+    // Keep stats fresh on size changes
+    const ro = new ResizeObserver(refreshStats);
+    ro.observe(container);
+    const mo = new MutationObserver(refreshStats);
+    mo.observe(target, { characterData: true, subtree: true, childList: true });
+
+    window.addEventListener('load', () => setTimeout(refreshStats, 120));
+  </script>
+</body>
+</html>
